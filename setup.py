@@ -17,11 +17,7 @@ if os.name == 'nt':
         """
         # Patch from: https://bugs.python.org/issue35893
         parts = ext.name.split('.')
-        if parts[-1] == '__init__':
-            suffix = parts[-2]
-        else:
-            suffix = parts[-1]
-
+        suffix = parts[-2] if parts[-1] == '__init__' else parts[-1]
         # from here on unchanged
         try:
             # Unicode module name support as defined in PEP-489
@@ -30,7 +26,7 @@ if os.name == 'nt':
         except UnicodeEncodeError:
             suffix = 'U' + suffix.encode('punycode').replace(b'-', b'_').decode('ascii')
 
-        initfunc_name = 'PyInit_' + suffix
+        initfunc_name = f'PyInit_{suffix}'
         if initfunc_name not in ext.export_symbols:
             ext.export_symbols.append(initfunc_name)
         return ext.export_symbols
@@ -72,7 +68,10 @@ except FileNotFoundError:
 version = SourceFileLoader('version', 'pydantic/version.py').load_module()
 
 ext_modules = None
-if not any(arg in sys.argv for arg in ['clean', 'check']) and 'SKIP_CYTHON' not in os.environ:
+if (
+    all(arg not in sys.argv for arg in ['clean', 'check'])
+    and 'SKIP_CYTHON' not in os.environ
+):
     try:
         from Cython.Build import cythonize
     except ImportError:

@@ -33,10 +33,7 @@ class ErrorWrapper(Representation):
         self._loc = loc
 
     def loc_tuple(self) -> 'Loc':
-        if isinstance(self._loc, tuple):
-            return self._loc
-        else:
-            return (self._loc,)
+        return self._loc if isinstance(self._loc, tuple) else (self._loc, )
 
     def __repr_args__(self) -> 'ReprArgs':
         return [('exc', self.exc), ('loc', self.loc_tuple())]
@@ -89,8 +86,7 @@ def _display_error_loc(error: 'ErrorDict') -> str:
 
 def _display_error_type_and_ctx(error: 'ErrorDict') -> str:
     t = 'type=' + error['type']
-    ctx = error.get('ctx')
-    if ctx:
+    if ctx := error.get('ctx'):
         return t + ''.join(f'; {k}={v}' for k, v in ctx.items())
     else:
         return t
@@ -102,11 +98,7 @@ def flatten_errors(
     for error in errors:
         if isinstance(error, ErrorWrapper):
 
-            if loc:
-                error_loc = loc + error.loc_tuple()
-            else:
-                error_loc = error.loc_tuple()
-
+            error_loc = loc + error.loc_tuple() if loc else error.loc_tuple()
             if isinstance(error.exc, ValidationError):
                 yield from flatten_errors(error.exc.raw_errors, config, error_loc)
             else:
@@ -121,11 +113,7 @@ def error_dict(exc: Exception, config: Type['BaseConfig'], loc: 'Loc') -> 'Error
     type_ = get_exc_type(exc.__class__)
     msg_template = config.error_msg_templates.get(type_) or getattr(exc, 'msg_template', None)
     ctx = exc.__dict__
-    if msg_template:
-        msg = msg_template.format(**ctx)
-    else:
-        msg = str(exc)
-
+    msg = msg_template.format(**ctx) if msg_template else str(exc)
     d: 'ErrorDict' = {'loc': loc, 'msg': msg, 'type': type_}
 
     if ctx:
@@ -159,4 +147,4 @@ def _get_exc_type(cls: Type[Exception]) -> str:
     # if it's not a TypeError or ValueError, we just take the lowercase of the exception name
     # no chaining or snake case logic, use "code" for more complex error types.
     code = getattr(cls, 'code', None) or cls.__name__.replace('Error', '').lower()
-    return base_name + '.' + code
+    return f'{base_name}.{code}'

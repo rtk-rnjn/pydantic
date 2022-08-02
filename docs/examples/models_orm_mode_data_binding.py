@@ -16,16 +16,13 @@ class UserGetter(GetterDict):
 
     def get(self, key: str, default: Any) -> Any:
 
-        # element attributes
         if key in {'Id', 'Status'}:
             return self._obj.attrib.get(key, default)
 
-        # element children
-        else:
-            try:
-                return self._obj.find(key).attrib['Value']
-            except (AttributeError, KeyError):
-                return default
+        try:
+            return self._obj.find(key).attrib['Value']
+        except (AttributeError, KeyError):
+            return default
 
 
 class User(BaseModel):

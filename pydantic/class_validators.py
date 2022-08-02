@@ -81,7 +81,7 @@ def validator(
             'The "whole" keyword argument is deprecated, use "each_item" (inverse meaning, default False) instead',
             DeprecationWarning,
         )
-        assert each_item is False, '"each_item" and "whole" conflict, remove "whole"'
+        assert not each_item, '"each_item" and "whole" conflict, remove "whole"'
         each_item = not whole
 
     def dec(f: AnyCallable) -> 'AnyClassMethod':
@@ -142,7 +142,7 @@ def _prepare_validator(function: AnyCallable, allow_reuse: bool) -> 'AnyClassMet
     """
     f_cls = function if isinstance(function, classmethod) else classmethod(function)
     if not in_ipython() and not allow_reuse:
-        ref = f_cls.__func__.__module__ + '.' + f_cls.__func__.__qualname__
+        ref = f'{f_cls.__func__.__module__}.{f_cls.__func__.__qualname__}'
         if ref in _FUNCS:
             raise ConfigError(f'duplicate validator function "{ref}"; if this is intended, set `allow_reuse=True`')
         _FUNCS.add(ref)
@@ -159,19 +159,15 @@ class ValidatorGroup:
         validators = self.validators.get(name, [])
         if name != ROOT_KEY:
             validators += self.validators.get('*', [])
-        if validators:
-            return {v.func.__name__: v for v in validators}
-        else:
-            return None
+        return {v.func.__name__: v for v in validators} if validators else None
 
     def check_for_unused(self) -> None:
-        unused_validators = set(
+        if unused_validators := set(
             chain.from_iterable(
                 (v.func.__name__ for v in self.validators[f] if v.check_fields)
                 for f in (self.validators.keys() - self.used_validators)
             )
-        )
-        if unused_validators:
+        ):
             fn = ', '.join(unused_validators)
             raise ConfigError(
                 f"Validators defined with incorrect fields: {fn} "  # noqa: Q000
@@ -182,8 +178,7 @@ class ValidatorGroup:
 def extract_validators(namespace: Dict[str, Any]) -> Dict[str, List[Validator]]:
     validators: Dict[str, List[Validator]] = {}
     for var_name, value in namespace.items():
-        validator_config = getattr(value, VALIDATOR_CONFIG_KEY, None)
-        if validator_config:
+        if validator_config := getattr(value, VALIDATOR_CONFIG_KEY, None):
             fields, v = validator_config
             for field in fields:
                 if field in validators:
@@ -276,7 +271,7 @@ def _generic_validator_cls(validator: AnyCallable, sig: 'Signature', args: Set[s
 
     if has_kwargs:
         return lambda cls, v, values, field, config: validator(cls, v, values=values, field=field, config=config)
-    elif args == set():
+    elif not args:
         return lambda cls, v, values, field, config: validator(cls, v)
     elif args == {'values'}:
         return lambda cls, v, values, field, config: validator(cls, v, values=values)
@@ -309,7 +304,7 @@ def _generic_validator_basic(validator: AnyCallable, sig: 'Signature', args: Set
 
     if has_kwargs:
         return lambda cls, v, values, field, config: validator(v, values=values, field=field, config=config)
-    elif args == set():
+    elif not args:
         return lambda cls, v, values, field, config: validator(v)
     elif args == {'values'}:
         return lambda cls, v, values, field, config: validator(v, values=values)

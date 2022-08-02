@@ -192,22 +192,22 @@ class AnyUrl(str):
             **_kwargs,  # type: ignore[misc]
         )
 
-        url = scheme + '://'
+        url = f'{scheme}://'
         if user:
             url += user
         if password:
-            url += ':' + password
+            url += f':{password}'
         if user or password:
             url += '@'
         url += host
         if port and ('port' not in cls.hidden_parts or cls.get_default_parts(parts).get('port') != port):
-            url += ':' + port
+            url += f':{port}'
         if path:
             url += path
         if query:
-            url += '?' + query
+            url += f'?{query}'
         if fragment:
-            url += '#' + fragment
+            url += f'#{fragment}'
         return url
 
     @classmethod
@@ -381,7 +381,7 @@ class RedisDsn(AnyUrl):
     @staticmethod
     def get_default_parts(parts: 'Parts') -> 'Parts':
         return {
-            'domain': 'localhost' if not (parts['ipv4'] or parts['ipv6']) else '',
+            'domain': '' if (parts['ipv4'] or parts['ipv6']) else 'localhost',
             'port': '6379',
             'path': '/0',
         }

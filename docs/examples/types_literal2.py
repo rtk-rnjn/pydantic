@@ -24,4 +24,4 @@ print(type(Meal(dessert={'kind': 'icecream'}).dessert).__name__)
 try:
     Meal(dessert={'kind': 'pie'})
 except ValidationError as e:
-    print(str(e))
+    print(e)

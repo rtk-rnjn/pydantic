@@ -14,4 +14,4 @@ class Pets(BaseModel):
 
 pets = Pets.parse_obj(['dog', 'cat'])
 print(pets[0])
-print([pet for pet in pets])
+print(list(pets))

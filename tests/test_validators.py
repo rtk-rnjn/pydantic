@@ -201,8 +201,11 @@ def test_validating_assignment_dict():
 
 
 def test_validating_assignment_values_dict():
+
     class ModelOne(BaseModel):
         a: int
+
+
 
     class ModelTwo(BaseModel):
         m: ModelOne
@@ -210,13 +213,11 @@ def test_validating_assignment_values_dict():
 
         @validator('b')
         def validate_b(cls, b, values):
-            if 'm' in values:
-                return b + values['m'].a  # this fails if values['m'] is a dict
-            else:
-                return b
+            return b + values['m'].a if 'm' in values else b
 
         class Config:
             validate_assignment = True
+
 
     model = ModelTwo(m=ModelOne(a=1), b=2)
     assert model.b == 3
@@ -225,7 +226,10 @@ def test_validating_assignment_values_dict():
 
 
 def test_validate_multiple():
-    # also test TypeError
+# also test TypeError
+
+
+
     class Model(BaseModel):
         a: str
         b: str
@@ -234,7 +238,8 @@ def test_validate_multiple():
         def check_a_and_b(cls, v, field, **kwargs):
             if len(v) < 4:
                 raise TypeError(f'{field.alias} is too short')
-            return v + 'x'
+            return f'{v}x'
+
 
     assert Model(a='1234', b='5678').dict() == {'a': '1234x', 'b': '5678x'}
 
@@ -1056,18 +1061,20 @@ def test_allow_reuse(include_root, allow_1, allow_2, allow_3, reset_tracked_vali
 def test_root_validator_classmethod(validator_classmethod, root_validator_classmethod, reset_tracked_validators):
     root_val_values = []
 
+
+
     class Model(BaseModel):
         a: int = 1
         b: str
 
-        def repeat_b(cls, v):
+        def repeat_b(self, v):
             return v * 2
 
         if validator_classmethod:
             repeat_b = classmethod(repeat_b)
         repeat_b = validator('b')(repeat_b)
 
-        def example_root_validator(cls, values):
+        def example_root_validator(self, values):
             root_val_values.append(values)
             if 'snap' in values.get('b', ''):
                 raise ValueError('foobar')
@@ -1076,6 +1083,7 @@ def test_root_validator_classmethod(validator_classmethod, root_validator_classm
         if root_validator_classmethod:
             example_root_validator = classmethod(example_root_validator)
         example_root_validator = root_validator(example_root_validator)
+
 
     assert Model(a='123', b='bar').dict() == {'a': 123, 'b': 'changed'}
 

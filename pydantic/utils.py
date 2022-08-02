@@ -140,13 +140,13 @@ def truncate(v: Union[str], *, max_len: int = 80) -> str:
     warnings.warn('`truncate` is no-longer used by pydantic and is deprecated', DeprecationWarning)
     if isinstance(v, str) and len(v) > (max_len - 2):
         # -3 so quote + string + … + quote has correct length
-        return (v[: (max_len - 3)] + '…').__repr__()
+        return f'{v[: (max_len - 3)]}…'.__repr__()
     try:
         v = v.__repr__()
     except TypeError:
         v = v.__class__.__repr__(v)  # in case v is a type
     if len(v) > max_len:
-        v = v[: max_len - 1] + '…'
+        v = f'{v[: max_len - 1]}…'
     return v
 
 
@@ -209,7 +209,7 @@ def deep_update(mapping: Dict[KeyType, Any], *updating_mappings: Dict[KeyType, A
 
 
 def update_not_none(mapping: Dict[Any, Any], **update: Any) -> None:
-    mapping.update({k: v for k, v in update.items() if v is not None})
+    mapping |= {k: v for k, v in update.items() if v is not None}
 
 
 def almost_equal_floats(value_1: float, value_2: float, *, delta: float = 1e-8) -> bool:
@@ -254,7 +254,7 @@ def generate_model_signature(
                     continue
 
             # TODO: replace annotation with actual expected types once #1055 solved
-            kwargs = {'default': field.default} if not field.required else {}
+            kwargs = {} if field.required else {'default': field.default}
             merged_params[param_name] = Parameter(
                 param_name, Parameter.KEYWORD_ONLY, annotation=field.outer_type_, **kwargs
             )
@@ -371,11 +371,11 @@ class Representation:
         """
         Used by devtools (https://python-devtools.helpmanual.io/) to provide a human readable representations of objects
         """
-        yield self.__repr_name__() + '('
+        yield f'{self.__repr_name__()}('
         yield 1
         for name, value in self.__repr_args__():
             if name is not None:
-                yield name + '='
+                yield f'{name}='
             yield fmt(value)
             yield ','
             yield 0
@@ -489,7 +489,7 @@ class ValueItems(Representation):
         """
 
         item = self._items.get(e)
-        return item if not self.is_true(item) else None
+        return None if self.is_true(item) else item
 
     def _normalize_indexes(self, items: 'MappingIntStrAny', v_length: int) -> 'DictIntStrAny':
         """
@@ -631,11 +631,10 @@ def path_type(p: 'Path') -> str:
     Find out what sort of thing a path is.
     """
     assert p.exists(), 'path does not exist'
-    for method, name in path_types.items():
-        if getattr(p, method)():
-            return name
-
-    return 'unknown'
+    return next(
+        (name for method, name in path_types.items() if getattr(p, method)()),
+        'unknown',
+    )
 
 
 Obj = TypeVar('Obj')
@@ -658,9 +657,7 @@ def smart_deepcopy(obj: Obj) -> Obj:
 
 
 def is_valid_field(name: str) -> bool:
-    if not name.startswith('_'):
-        return True
-    return ROOT_KEY == name
+    return ROOT_KEY == name if name.startswith('_') else True
 
 
 def is_valid_private_name(name: str) -> bool:
@@ -687,10 +684,10 @@ def all_identical(left: Iterable[Any], right: Iterable[Any]) -> bool:
     >>> all_identical([a, b, [a]], [a, b, [a]])  # new list object, while "equal" is not "identical"
     False
     """
-    for left_item, right_item in zip_longest(left, right, fillvalue=_EMPTY):
-        if left_item is not right_item:
-            return False
-    return True
+    return all(
+        left_item is right_item
+        for left_item, right_item in zip_longest(left, right, fillvalue=_EMPTY)
+    )
 
 
 def get_unique_discriminator_alias(all_aliases: Collection[str], discriminator_key: str) -> str:

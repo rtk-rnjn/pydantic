@@ -157,11 +157,17 @@ DynamicAliasModel2(y='y', z=1)
 DynamicAliasModel2(x='y', z=1)
 
 
+
+
 class AliasGeneratorModel(BaseModel):
     x: int
 
+
+
     class Config:
-        alias_generator = lambda x: x + '_'  # noqa E731
+        alias_generator = lambda x: f'{x}_'
+
+
 
 
 AliasGeneratorModel(x=1)
@@ -169,11 +175,17 @@ AliasGeneratorModel(x_=1)
 AliasGeneratorModel(z=1)
 
 
+
+
 class AliasGeneratorModel2(BaseModel):
     x: int = Field(..., alias='y')
 
+
+
     class Config:  # type: ignore[pydantic-alias]  # noqa F821
-        alias_generator = lambda x: x + '_'  # noqa E731
+        alias_generator = lambda x: f'{x}_'
+
+
 
 
 class UntypedFieldModel(BaseModel):

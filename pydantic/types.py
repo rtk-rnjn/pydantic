@@ -406,9 +406,8 @@ class ConstrainedStr(str):
         if cls.curtail_length and len(value) > cls.curtail_length:
             value = value[: cls.curtail_length]
 
-        if cls.regex:
-            if not cls.regex.match(value):
-                raise errors.StrRegexError(pattern=cls.regex.pattern)
+        if cls.regex and not cls.regex.match(value):
+            raise errors.StrRegexError(pattern=cls.regex.pattern)
 
         return value
 
@@ -659,17 +658,11 @@ class ConstrainedDecimal(Decimal, metaclass=ConstrainedNumberMeta):
             # A positive exponent adds that many trailing zeros.
             digits = len(digit_tuple) + exponent
             decimals = 0
+        elif abs(exponent) > len(digit_tuple):
+            digits = decimals = abs(exponent)
         else:
-            # If the absolute value of the negative exponent is larger than the
-            # number of digits, then it's the same as the number of digits,
-            # because it'll consume all of the digits in digit_tuple and then
-            # add abs(exponent) - len(digit_tuple) leading zeros after the
-            # decimal point.
-            if abs(exponent) > len(digit_tuple):
-                digits = decimals = abs(exponent)
-            else:
-                digits = len(digit_tuple)
-                decimals = abs(exponent)
+            digits = len(digit_tuple)
+            decimals = abs(exponent)
         whole_digits = digits - decimals
 
         if cls.max_digits is not None and digits > cls.max_digits:
@@ -996,14 +989,13 @@ class PaymentCardNumber(str):
     @staticmethod
     def _get_brand(card_number: str) -> PaymentCardBrand:
         if card_number[0] == '4':
-            brand = PaymentCardBrand.visa
+            return PaymentCardBrand.visa
         elif 51 <= int(card_number[:2]) <= 55:
-            brand = PaymentCardBrand.mastercard
+            return PaymentCardBrand.mastercard
         elif card_number[:2] in {'34', '37'}:
-            brand = PaymentCardBrand.amex
+            return PaymentCardBrand.amex
         else:
-            brand = PaymentCardBrand.other
-        return brand
+            return PaymentCardBrand.other
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ BYTE SIZE TYPE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1022,8 +1014,8 @@ BYTE_SIZES = {
     'tib': 2**40,
     'pib': 2**50,
     'eib': 2**60,
-}
-BYTE_SIZES.update({k.lower()[0]: v for k, v in BYTE_SIZES.items() if 'i' not in k})
+} | {k.lower()[0]: v for k, v in BYTE_SIZES.items() if 'i' not in k}
+
 byte_string_re = re.compile(r'^\s*(\d*\.?\d+)\s*(\w+)?', re.IGNORECASE)
 
 

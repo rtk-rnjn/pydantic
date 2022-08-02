@@ -63,8 +63,7 @@ def setattr_validate_assignment(self: 'Dataclass', name: str, value: Any) -> Non
     if self.__initialised__:
         d = dict(self.__dict__)
         d.pop(name, None)
-        known_field = self.__pydantic_model__.__fields__.get(name, None)
-        if known_field:
+        if known_field := self.__pydantic_model__.__fields__.get(name, None):
             value, error_ = known_field.validate(value, d, loc=name, cls=self.__class__)
             if error_:
                 raise ValidationError([error_], self.__class__)
@@ -259,10 +258,7 @@ def dataclass(
     def wrap(cls: Type[Any]) -> Type['Dataclass']:
         return _process_class(cls, init, repr, eq, order, unsafe_hash, frozen, config)
 
-    if _cls is None:
-        return wrap
-
-    return wrap(_cls)
+    return wrap if _cls is None else wrap(_cls)
 
 
 def make_dataclass_validator(_cls: Type[Any], config: Type['BaseConfig']) -> 'CallableGenerator':

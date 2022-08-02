@@ -179,9 +179,12 @@ class GenericModel(BaseModel):
         """
 
         def build_base_model(
-            base_model: Type[GenericModel], mapped_types: Parametrization
-        ) -> Iterator[Type[GenericModel]]:
-            base_parameters = tuple([mapped_types[param] for param in base_model.__parameters__])
+                base_model: Type[GenericModel], mapped_types: Parametrization
+            ) -> Iterator[Type[GenericModel]]:
+            base_parameters = tuple(
+                mapped_types[param] for param in base_model.__parameters__
+            )
+
             parameterized_base = base_model.__class_getitem__(base_parameters)
             if parameterized_base is base_model or parameterized_base is cls:
                 # Avoid duplication in MRO
@@ -205,14 +208,13 @@ class GenericModel(BaseModel):
                     # but it's not viable to consistently subclass types with arbitrary construction
                     # So don't attempt to include A[S][int]
                     continue
-                else:  # base_model not in _assigned_parameters:
-                    # cls is partially parameterized, base_model is original generic
-                    # e.g.  cls = B[str, T], base_model = B[S, T]
-                    # Need to determine the mapping for the base_model parameters
-                    mapped_types: Parametrization = {
-                        key: typevars_map.get(value, value) for key, value in _assigned_parameters[cls].items()
-                    }
-                    yield from build_base_model(base_model, mapped_types)
+                # cls is partially parameterized, base_model is original generic
+                # e.g.  cls = B[str, T], base_model = B[S, T]
+                # Need to determine the mapping for the base_model parameters
+                mapped_types: Parametrization = {
+                    key: typevars_map.get(value, value) for key, value in _assigned_parameters[cls].items()
+                }
+                yield from build_base_model(base_model, mapped_types)
             else:
                 # cls is base generic, so base_class has a distinct base
                 # can construct the Parameterised base model using typevars_map directly
@@ -274,11 +276,8 @@ def replace_types(type_: Any, type_map: Mapping[Any, Any]) -> Any:
     # Handle special case for typehints that can have lists as arguments.
     # `typing.Callable[[int, str], int]` is an example for this.
     if isinstance(type_, (List, list)):
-        resolved_list = list(replace_types(element, type_map) for element in type_)
-        if all_identical(type_, resolved_list):
-            return type_
-        return resolved_list
-
+        resolved_list = [replace_types(element, type_map) for element in type_]
+        return type_ if all_identical(type_, resolved_list) else resolved_list
     # For JsonWrapperValue, need to handle its inner type to allow correct parsing
     # of generic Json arguments like Json[T]
     if not origin_type and lenient_issubclass(type_, JsonWrapper):

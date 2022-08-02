@@ -270,12 +270,15 @@ def test_custom_getter_dict():
 
 
 def test_custom_getter_dict_derived_model_class():
+
+
+
     class CustomCollection:
         __custom__ = True
 
         def __iter__(self):
-            for elem in range(5):
-                yield elem
+            yield from range(5)
+
 
     class Example:
         def __init__(self, *args, **kwargs):
@@ -283,12 +286,13 @@ def test_custom_getter_dict_derived_model_class():
             self.id = 1
             self.name = 'name'
 
+
+
     class MyGetterDict(GetterDict):
         def get(self, key: Any, default: Any = None) -> Any:
             res = getattr(self._obj, key, default)
-            if hasattr(res, '__custom__'):
-                return list(res)
-            return res
+            return list(res) if hasattr(res, '__custom__') else res
+
 
     class ExampleBase(BaseModel):
         name: str
