@@ -148,7 +148,7 @@ def schema(
             ref_prefix=ref_prefix,
             ref_template=ref_template,
         )
-        definitions.update(m_definitions)
+        definitions |= m_definitions
         model_name = model_name_map[model]
         definitions[model_name] = m_schema
     if definitions:
@@ -250,8 +250,7 @@ def field_schema(
     """
     s, schema_overrides = get_field_info_schema(field)
 
-    validation_schema = get_field_schema_validations(field)
-    if validation_schema:
+    if validation_schema := get_field_schema_validations(field):
         s.update(validation_schema)
         schema_overrides = True
 
@@ -265,12 +264,10 @@ def field_schema(
         known_models=known_models or set(),
     )
 
-    # $ref will only be returned when there are no schema_overrides
     if '$ref' in f_schema:
         return f_schema, f_definitions, f_nested_models
-    else:
-        s.update(f_schema)
-        return s, f_definitions, f_nested_models
+    s.update(f_schema)
+    return s, f_definitions, f_nested_models
 
 
 numeric_types = (int, float, Decimal)
@@ -299,7 +296,7 @@ def get_field_schema_validations(field: ModelField) -> Dict[str, Any]:
     if lenient_issubclass(field.type_, Enum):
         # schema is already updated by `enum_process_schema`; just update with field extra
         if field.field_info.extra:
-            f_schema.update(field.field_info.extra)
+            f_schema |= field.field_info.extra
         return f_schema
 
     if lenient_issubclass(field.type_, (str, bytes)):
@@ -316,8 +313,7 @@ def get_field_schema_validations(field: ModelField) -> Dict[str, Any]:
         f_schema['const'] = field.default
     if field.field_info.extra:
         f_schema.update(field.field_info.extra)
-    modify_schema = getattr(field.outer_type_, '__modify_schema__', None)
-    if modify_schema:
+    if modify_schema := getattr(field.outer_type_, '__modify_schema__', None):
         _apply_modify_schema(modify_schema, field, f_schema)
     return f_schema
 
@@ -361,8 +357,7 @@ def get_flat_models_from_model(model: Type['BaseModel'], known_models: TypeModel
     :return: a set with the initial model and all its sub-models
     """
     known_models = known_models or set()
-    flat_models: TypeModelSet = set()
-    flat_models.add(model)
+    flat_models: TypeModelSet = {model}
     known_models |= flat_models
     fields = cast(Sequence[ModelField], model.__fields__.values())
     flat_models |= get_flat_models_from_fields(fields, known_models=known_models)
@@ -476,7 +471,7 @@ def field_type_schema(
             ref_template=ref_template,
             known_models=known_models,
         )
-        definitions.update(f_definitions)
+        definitions |= f_definitions
         nested_models.update(f_nested_models)
         f_schema = {'type': 'array', 'items': items_schema}
         if field.shape in {SHAPE_SET, SHAPE_FROZENSET}:
@@ -547,12 +542,8 @@ def field_type_schema(
 
     # check field type to avoid repeated calls to the same __modify_schema__ method
     if field.type_ != field.outer_type_:
-        if field.shape == SHAPE_GENERIC:
-            field_type = field.type_
-        else:
-            field_type = field.outer_type_
-        modify_schema = getattr(field_type, '__modify_schema__', None)
-        if modify_schema:
+        field_type = field.type_ if field.shape == SHAPE_GENERIC else field.outer_type_
+        if modify_schema := getattr(field_type, '__modify_schema__', None):
             _apply_modify_schema(modify_schema, field, f_schema)
     return f_schema, definitions, nested_models
 
@@ -583,8 +574,7 @@ def model_process_schema(
         return s, {}, set()
     model = cast(Type['BaseModel'], model)
     s = {'title': model.__config__.title or model.__name__}
-    doc = getdoc(model)
-    if doc:
+    if doc := getdoc(model):
         s['description'] = doc
     known_models.add(model)
     m_schema, m_definitions, nested_models = model_type_schema(
@@ -595,7 +585,7 @@ def model_process_schema(
         ref_template=ref_template,
         known_models=known_models,
     )
-    s.update(m_schema)
+    s |= m_schema
     schema_extra = model.__config__.schema_extra
     if callable(schema_extra):
         if len(signature(schema_extra).parameters) == 1:
@@ -639,7 +629,7 @@ def model_type_schema(
         except SkipField as skip:
             warnings.warn(skip.message, UserWarning)
             continue
-        definitions.update(f_definitions)
+        definitions |= f_definitions
         nested_models.update(f_nested_models)
         if by_alias:
             properties[f.alias] = f_schema
@@ -680,8 +670,7 @@ def enum_process_schema(enum: Type[Enum], *, field: Optional[ModelField] = None)
 
     add_field_type_to_schema(enum, schema_)
 
-    modify_schema = getattr(enum, '__modify_schema__', None)
-    if modify_schema:
+    if modify_schema := getattr(enum, '__modify_schema__', None):
         _apply_modify_schema(modify_schema, field, schema_)
 
     return schema_
@@ -704,8 +693,6 @@ def field_singleton_sub_fields_schema(
     schema. I.e., fields used as "type parameters", like ``str`` and ``int`` in ``Tuple[str, int]``.
     """
     sub_fields = cast(List[ModelField], field.sub_fields)
-    definitions = {}
-    nested_models: Set[str] = set()
     if len(sub_fields) == 1:
         return field_type_schema(
             sub_fields[0],
@@ -716,63 +703,64 @@ def field_singleton_sub_fields_schema(
             ref_template=ref_template,
             known_models=known_models,
         )
-    else:
-        s: Dict[str, Any] = {}
-        # https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.2.md#discriminator-object
-        if field.discriminator_key is not None:
-            assert field.sub_fields_mapping is not None
+    s: Dict[str, Any] = {}
+    # https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.2.md#discriminator-object
+    if field.discriminator_key is not None:
+        assert field.sub_fields_mapping is not None
 
-            discriminator_models_refs: Dict[str, Union[str, Dict[str, Any]]] = {}
+        discriminator_models_refs: Dict[str, Union[str, Dict[str, Any]]] = {}
 
-            for discriminator_value, sub_field in field.sub_fields_mapping.items():
-                # sub_field is either a `BaseModel` or directly an `Annotated` `Union` of many
-                if is_union(get_origin(sub_field.type_)):
-                    sub_models = get_sub_types(sub_field.type_)
-                    discriminator_models_refs[discriminator_value] = {
-                        model_name_map[sub_model]: get_schema_ref(
-                            model_name_map[sub_model], ref_prefix, ref_template, False
-                        )
-                        for sub_model in sub_models
-                    }
-                else:
-                    sub_field_type = sub_field.type_
-                    if hasattr(sub_field_type, '__pydantic_model__'):
-                        sub_field_type = sub_field_type.__pydantic_model__
+        for discriminator_value, sub_field in field.sub_fields_mapping.items():
+            # sub_field is either a `BaseModel` or directly an `Annotated` `Union` of many
+            if is_union(get_origin(sub_field.type_)):
+                sub_models = get_sub_types(sub_field.type_)
+                discriminator_models_refs[discriminator_value] = {
+                    model_name_map[sub_model]: get_schema_ref(
+                        model_name_map[sub_model], ref_prefix, ref_template, False
+                    )
+                    for sub_model in sub_models
+                }
+            else:
+                sub_field_type = sub_field.type_
+                if hasattr(sub_field_type, '__pydantic_model__'):
+                    sub_field_type = sub_field_type.__pydantic_model__
 
-                    discriminator_model_name = model_name_map[sub_field_type]
-                    discriminator_model_ref = get_schema_ref(discriminator_model_name, ref_prefix, ref_template, False)
-                    discriminator_models_refs[discriminator_value] = discriminator_model_ref['$ref']
+                discriminator_model_name = model_name_map[sub_field_type]
+                discriminator_model_ref = get_schema_ref(discriminator_model_name, ref_prefix, ref_template, False)
+                discriminator_models_refs[discriminator_value] = discriminator_model_ref['$ref']
 
-            s['discriminator'] = {
-                'propertyName': field.discriminator_alias,
-                'mapping': discriminator_models_refs,
-            }
+        s['discriminator'] = {
+            'propertyName': field.discriminator_alias,
+            'mapping': discriminator_models_refs,
+        }
 
-        sub_field_schemas = []
-        for sf in sub_fields:
-            sub_schema, sub_definitions, sub_nested_models = field_type_schema(
-                sf,
-                by_alias=by_alias,
-                model_name_map=model_name_map,
-                schema_overrides=schema_overrides,
-                ref_prefix=ref_prefix,
-                ref_template=ref_template,
-                known_models=known_models,
-            )
-            definitions.update(sub_definitions)
-            if schema_overrides and 'allOf' in sub_schema:
-                # if the sub_field is a referenced schema we only need the referenced
-                # object. Otherwise we will end up with several allOf inside anyOf.
-                # See https://github.com/samuelcolvin/pydantic/issues/1209
-                sub_schema = sub_schema['allOf'][0]
+    sub_field_schemas = []
+    definitions = {}
+    nested_models: Set[str] = set()
+    for sf in sub_fields:
+        sub_schema, sub_definitions, sub_nested_models = field_type_schema(
+            sf,
+            by_alias=by_alias,
+            model_name_map=model_name_map,
+            schema_overrides=schema_overrides,
+            ref_prefix=ref_prefix,
+            ref_template=ref_template,
+            known_models=known_models,
+        )
+        definitions |= sub_definitions
+        if schema_overrides and 'allOf' in sub_schema:
+            # if the sub_field is a referenced schema we only need the referenced
+            # object. Otherwise we will end up with several allOf inside anyOf.
+            # See https://github.com/samuelcolvin/pydantic/issues/1209
+            sub_schema = sub_schema['allOf'][0]
 
-            if sub_schema.keys() == {'discriminator', 'anyOf'}:
-                # we don't want discriminator information inside anyOf choices, this is dealt with elsewhere
-                sub_schema.pop('discriminator')
-            sub_field_schemas.append(sub_schema)
-            nested_models.update(sub_nested_models)
-        s['anyOf'] = sub_field_schemas
-        return s, definitions, nested_models
+        if sub_schema.keys() == {'discriminator', 'anyOf'}:
+            # we don't want discriminator information inside anyOf choices, this is dealt with elsewhere
+            sub_schema.pop('discriminator')
+        sub_field_schemas.append(sub_schema)
+        nested_models.update(sub_nested_models)
+    s['anyOf'] = sub_field_schemas
+    return s, definitions, nested_models
 
 
 # Order is important, e.g. subclasses of str must go before str
@@ -817,7 +805,7 @@ def add_field_type_to_schema(field_type: Any, schema_: Dict[str, Any]) -> None:
     for type_, t_schema in field_class_to_schema:
         # Fallback for `typing.Pattern` as it is not a valid class
         if lenient_issubclass(field_type, type_) or field_type is type_ is Pattern:
-            schema_.update(t_schema)
+            schema_ |= t_schema
             break
 
 
@@ -918,8 +906,7 @@ def field_singleton_schema(  # noqa: C901 (ignore complexity)
     elif not hasattr(field_type, '__pydantic_model__'):
         add_field_type_to_schema(field_type, f_schema)
 
-        modify_schema = getattr(field_type, '__modify_schema__', None)
-        if modify_schema:
+        if modify_schema := getattr(field_type, '__modify_schema__', None):
             _apply_modify_schema(modify_schema, field, f_schema)
 
     if f_schema:
@@ -941,7 +928,7 @@ def field_singleton_schema(  # noqa: C901 (ignore complexity)
                 known_models=known_models,
                 field=field,
             )
-            definitions.update(sub_definitions)
+            definitions |= sub_definitions
             definitions[model_name] = sub_schema
             nested_models.update(sub_nested_models)
         else:
@@ -1017,8 +1004,7 @@ def get_annotation_from_field_info(
     if validate_assignment:
         used_constraints.add('allow_mutation')
 
-    unused_constraints = constraints - used_constraints
-    if unused_constraints:
+    if unused_constraints := constraints - used_constraints:
         raise ValueError(
             f'On field "{field_name}" the following field constraints are set but not enforced: '
             f'{", ".join(unused_constraints)}. '

@@ -57,10 +57,7 @@ if TYPE_CHECKING:
 
 def str_validator(v: Any) -> Union[str]:
     if isinstance(v, str):
-        if isinstance(v, Enum):
-            return v.value
-        else:
-            return v
+        return v.value if isinstance(v, Enum) else v
     elif isinstance(v, (float, int, Decimal)):
         # is there anything else we want to add here? If you think so, create an issue.
         return str(v)
@@ -120,7 +117,7 @@ def bool_validator(v: Any) -> bool:
 
 
 def int_validator(v: Any) -> int:
-    if isinstance(v, int) and not (v is True or v is False):
+    if isinstance(v, int) and v is not True and v is not False:
         return v
 
     try:
@@ -130,7 +127,7 @@ def int_validator(v: Any) -> int:
 
 
 def strict_int_validator(v: Any) -> int:
-    if isinstance(v, int) and not (v is True or v is False):
+    if isinstance(v, int) and v is not True and v is not False:
         return v
     raise errors.IntegerError()
 
@@ -481,16 +478,17 @@ def constr_length_validator(v: 'StrBytes', field: 'ModelField', config: 'BaseCon
 
 
 def constr_strip_whitespace(v: 'StrBytes', field: 'ModelField', config: 'BaseConfig') -> 'StrBytes':
-    strip_whitespace = field.type_.strip_whitespace or config.anystr_strip_whitespace
-    if strip_whitespace:
+    if (
+        strip_whitespace := field.type_.strip_whitespace
+        or config.anystr_strip_whitespace
+    ):
         v = v.strip()
 
     return v
 
 
 def constr_lower(v: 'StrBytes', field: 'ModelField', config: 'BaseConfig') -> 'StrBytes':
-    lower = field.type_.to_lower or config.anystr_lower
-    if lower:
+    if lower := field.type_.to_lower or config.anystr_lower:
         v = v.lower()
     return v
 
@@ -661,7 +659,7 @@ def find_validators(  # noqa: C901 (ignore complexity)
     if type_ is Any or type_ is object:
         return
     type_type = type_.__class__
-    if type_type == ForwardRef or type_type == TypeVar:
+    if type_type in [ForwardRef, TypeVar]:
         return
 
     if is_none_type(type_):

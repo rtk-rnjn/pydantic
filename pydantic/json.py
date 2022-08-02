@@ -79,19 +79,16 @@ def pydantic_encoder(obj: Any) -> Any:
     elif is_dataclass(obj):
         return asdict(obj)
 
-    # Check the class type and its superclasses for a matching encoder
     for base in obj.__class__.__mro__[:-1]:
         try:
             encoder = ENCODERS_BY_TYPE[base]
         except KeyError:
             continue
         return encoder(obj)
-    else:  # We have exited the for loop without finding a suitable encoder
-        raise TypeError(f"Object of type '{obj.__class__.__name__}' is not JSON serializable")
+    raise TypeError(f"Object of type '{obj.__class__.__name__}' is not JSON serializable")
 
 
 def custom_pydantic_encoder(type_encoders: Dict[Any, Callable[[Type[Any]], Any]], obj: Any) -> Any:
-    # Check the class type and its superclasses for a matching encoder
     for base in obj.__class__.__mro__[:-1]:
         try:
             encoder = type_encoders[base]
@@ -99,8 +96,7 @@ def custom_pydantic_encoder(type_encoders: Dict[Any, Callable[[Type[Any]], Any]]
             continue
 
         return encoder(obj)
-    else:  # We have exited the for loop without finding a suitable encoder
-        return pydantic_encoder(obj)
+    return pydantic_encoder(obj)
 
 
 def timedelta_isoformat(td: datetime.timedelta) -> str:

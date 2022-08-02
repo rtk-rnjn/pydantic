@@ -65,11 +65,11 @@ class BaseSettings(BaseModel):
             ),
         )
         file_secret_settings = SecretsSettingsSource(secrets_dir=_secrets_dir or self.__config__.secrets_dir)
-        # Provide a hook to set built-in sources priority and add / remove sources
-        sources = self.__config__.customise_sources(
-            init_settings=init_settings, env_settings=env_settings, file_secret_settings=file_secret_settings
-        )
-        if sources:
+        if sources := self.__config__.customise_sources(
+            init_settings=init_settings,
+            env_settings=env_settings,
+            file_secret_settings=file_secret_settings,
+        ):
             return deep_update(*reversed([source(self) for source in sources]))
         else:
             # no one should mean to do this, but I think returning an empty dict is marginally preferable
@@ -151,7 +151,7 @@ class EnvSettingsSource:
         self.env_file_encoding: Optional[str] = env_file_encoding
         self.env_nested_delimiter: Optional[str] = env_nested_delimiter
 
-    def __call__(self, settings: BaseSettings) -> Dict[str, Any]:  # noqa C901
+    def __call__(self, settings: BaseSettings) -> Dict[str, Any]:    # noqa C901
         """
         Build environment variables suitable for passing to the Model.
         """
@@ -182,9 +182,7 @@ class EnvSettingsSource:
             is_complex, allow_json_failure = self.field_is_complex(field)
             if is_complex:
                 if env_val is None:
-                    # field is complex but no value found so far, try explode_env_vars
-                    env_val_built = self.explode_env_vars(field, env_vars)
-                    if env_val_built:
+                    if env_val_built := self.explode_env_vars(field, env_vars):
                         d[field.alias] = env_val_built
                 else:
                     # field is complex and there's a value, decode that as JSON, then add explode_env_vars
@@ -300,7 +298,8 @@ def read_env_file(
         raise ImportError('python-dotenv is not installed, run `pip install pydantic[dotenv]`') from e
 
     file_vars: Dict[str, Optional[str]] = dotenv_values(file_path, encoding=encoding or 'utf8')
-    if not case_sensitive:
-        return {k.lower(): v for k, v in file_vars.items()}
-    else:
-        return file_vars
+    return (
+        file_vars
+        if case_sensitive
+        else {k.lower(): v for k, v in file_vars.items()}
+    )

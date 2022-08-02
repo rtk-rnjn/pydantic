@@ -110,11 +110,7 @@ def parse_date(value: Union[date, StrBytesIntFloat]) -> date:
     Raise ValueError if the input isn't well formatted.
     """
     if isinstance(value, date):
-        if isinstance(value, datetime):
-            return value.date()
-        else:
-            return value
-
+        return value.date() if isinstance(value, datetime) else value
     number = get_numeric(value, 'date')
     if number is not None:
         return from_unix_seconds(number).date()

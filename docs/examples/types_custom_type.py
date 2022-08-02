@@ -45,14 +45,14 @@ class PostCode(str):
     def validate(cls, v):
         if not isinstance(v, str):
             raise TypeError('string required')
-        m = post_code_regex.fullmatch(v.upper())
-        if not m:
+        if m := post_code_regex.fullmatch(v.upper()):
+            # you could also return a string here which would mean model.post_code
+            # would be a string, pydantic won't care but you could end up with some
+            # confusion since the value's type won't match the type annotation
+            # exactly
+            return cls(f'{m.group(1)} {m.group(2)}')
+        else:
             raise ValueError('invalid postcode format')
-        # you could also return a string here which would mean model.post_code
-        # would be a string, pydantic won't care but you could end up with some
-        # confusion since the value's type won't match the type annotation
-        # exactly
-        return cls(f'{m.group(1)} {m.group(2)}')
 
     def __repr__(self):
         return f'PostCode({super().__repr__()})'

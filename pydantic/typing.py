@@ -130,9 +130,7 @@ else:
         In order to still support `Dict` for example and consider it as `Dict[Any, Any]`,
         we retrieve the `_nparams` value that tells us how many parameters it needs.
         """
-        if hasattr(tp, '_nparams'):
-            return (Any,) * tp._nparams
-        return ()
+        return (Any,) * tp._nparams if hasattr(tp, '_nparams') else ()
 
     def get_args(tp: Type[Any]) -> Tuple[Any, ...]:
         """Get type arguments with all substitutions performed.
@@ -225,17 +223,7 @@ else:
     WithArgsTypes = (typing._GenericAlias, types.GenericAlias, types.UnionType)
 
 
-if sys.version_info < (3, 9):
-    StrPath = Union[str, PathLike]
-else:
-    StrPath = Union[str, PathLike]
-    # TODO: Once we switch to Cython 3 to handle generics properly
-    #  (https://github.com/cython/cython/issues/2753), use following lines instead
-    #  of the one above
-    # # os.PathLike only becomes subscriptable from Python 3.9 onwards
-    # StrPath = Union[str, PathLike[str]]
-
-
+StrPath = Union[str, PathLike]
 if TYPE_CHECKING:
     from .fields import ModelField
 
@@ -317,18 +305,12 @@ elif sys.version_info[:2] == (3, 8):
 
     def is_none_type(type_: Any) -> bool:
         Literal[None]  # fix edge case
-        for none_type in NONE_TYPES:
-            if type_ is none_type:
-                return True
-        return False
+        return any(type_ is none_type for none_type in NONE_TYPES)
 
 else:
 
     def is_none_type(type_: Any) -> bool:
-        for none_type in NONE_TYPES:
-            if type_ is none_type:
-                return True
-        return False
+        return any(type_ is none_type for none_type in NONE_TYPES)
 
 
 def display_as_type(v: Type[Any]) -> str:
@@ -455,10 +437,10 @@ def is_classvar(ann_type: Type[Any]) -> bool:
 
     # this is an ugly workaround for class vars that contain forward references and are therefore themselves
     # forward references, see #3679
-    if ann_type.__class__ == ForwardRef and ann_type.__forward_arg__.startswith('ClassVar['):
-        return True
-
-    return False
+    return bool(
+        ann_type.__class__ == ForwardRef
+        and ann_type.__forward_arg__.startswith('ClassVar[')
+    )
 
 
 def update_field_forward_refs(field: 'ModelField', globalns: Any, localns: Any) -> None:
@@ -525,10 +507,7 @@ def get_class(type_: Type[Any]) -> Union[None, bool, Type[Any]]:
         return None
 
     args = get_args(type_)
-    if not args or not isinstance(args[0], type):
-        return True
-    else:
-        return args[0]
+    return True if not args or not isinstance(args[0], type) else args[0]
 
 
 def get_sub_types(tp: Any) -> List[Any]:

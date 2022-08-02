@@ -20,7 +20,13 @@ THIS_DIR = Path(__file__).parent
 DOCS_DIR = (THIS_DIR / '..').resolve()
 EXAMPLES_DIR = DOCS_DIR / 'examples'
 TMP_EXAMPLES_DIR = DOCS_DIR / '.tmp_examples'
-MAX_LINE_LENGTH = int(re.search(r'max_line_length = (\d+)', (EXAMPLES_DIR / '.editorconfig').read_text()).group(1))
+MAX_LINE_LENGTH = int(
+    re.search(
+        r'max_line_length = (\d+)',
+        (EXAMPLES_DIR / '.editorconfig').read_text(),
+    )[1]
+)
+
 LONG_LINE = 50
 pformat = PrettyFormat(simple_cutoff=LONG_LINE)
 
@@ -87,9 +93,8 @@ def build_print_lines(s: str, max_len_reduction: int = 0):
 def build_print_statement(line_no: int, s: str, lines: List[str]) -> None:
     indent = ''
     for back in range(1, 100):
-        m = re.search(r'^( *)print\(', lines[line_no - back])
-        if m:
-            indent = m.group(1)
+        if m := re.search(r'^( *)print\(', lines[line_no - back]):
+            indent = m[1]
             break
     print_lines = build_print_lines(s, len(indent))
 
@@ -101,9 +106,7 @@ def build_print_statement(line_no: int, s: str, lines: List[str]) -> None:
 
 
 def all_md_contents() -> str:
-    file_contents = []
-    for f in DOCS_DIR.glob('**/*.md'):
-        file_contents.append(f.read_text())
+    file_contents = [f.read_text() for f in DOCS_DIR.glob('**/*.md')]
     return '\n\n\n'.join(file_contents)
 
 
@@ -128,16 +131,13 @@ required_py_re = re.compile(r'^# *requires *python *(\d+).(\d+)', flags=re.M)
 def should_execute(file_name: str, file_text: str) -> Tuple[str, bool]:
     if dont_execute_re.search(file_text):
         return dont_execute_re.sub('', file_text), False
-    m = required_py_re.search(file_text)
-    if m:
-        if sys.version_info >= tuple(int(v) for v in m.groups()):
-            return required_py_re.sub('', file_text), True
-        else:
-            v = '.'.join(m.groups())
-            print(f'WARNING: {file_name} requires python {v}, not running')
-            return required_py_re.sub(f'# requires python {v}, NOT EXECUTED!', file_text), False
-    else:
+    if not (m := required_py_re.search(file_text)):
         return file_text, True
+    if sys.version_info >= tuple(int(v) for v in m.groups()):
+        return required_py_re.sub('', file_text), True
+    v = '.'.join(m.groups())
+    print(f'WARNING: {file_name} requires python {v}, not running')
+    return required_py_re.sub(f'# requires python {v}, NOT EXECUTED!', file_text), False
 
 
 def exec_examples():
@@ -214,7 +214,7 @@ def exec_examples():
                 if len(mp.statements) != 1:
                     error('should have exactly one print statement')
                 print_lines = build_print_lines(mp.statements[0][1])
-                new_files[file.stem + '.json'] = '\n'.join(print_lines) + '\n'
+                new_files[f'{file.stem}.json'] = '\n'.join(print_lines) + '\n'
             else:
                 for line_no, print_string in reversed(mp.statements):
                     build_print_statement(line_no, print_string, lines)

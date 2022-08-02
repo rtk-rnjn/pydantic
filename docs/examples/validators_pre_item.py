@@ -9,9 +9,7 @@ class DemoModel(BaseModel):
     # '*' is the same as 'cube_numbers', 'square_numbers' here:
     @validator('*', pre=True)
     def split_str(cls, v):
-        if isinstance(v, str):
-            return v.split('|')
-        return v
+        return v.split('|') if isinstance(v, str) else v
 
     @validator('cube_numbers', 'square_numbers')
     def check_sum(cls, v):

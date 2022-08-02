@@ -27,4 +27,7 @@ def version_info() -> str:
         'platform': platform.platform(),
         'optional deps. installed': optional_deps,
     }
-    return '\n'.join('{:>30} {}'.format(k + ':', str(v).replace('\n', ' ')) for k, v in info.items())
+    return '\n'.join(
+        '{:>30} {}'.format(f'{k}:', str(v).replace('\n', ' '))
+        for k, v in info.items()
+    )

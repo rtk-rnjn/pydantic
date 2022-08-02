@@ -710,11 +710,12 @@ class Foo(BaseModel):
     ],
 )
 def test_list_union_dict(field_type, expected_schema):
+
     class Model(BaseModel):
         a: field_type
 
     base_schema = {'title': 'Model', 'type': 'object'}
-    base_schema.update(expected_schema)
+    base_schema |= expected_schema
 
     assert Model.schema() == base_schema
 
@@ -729,11 +730,12 @@ def test_list_union_dict(field_type, expected_schema):
     ],
 )
 def test_date_types(field_type, expected_schema):
+
     class Model(BaseModel):
         a: field_type
 
     attribute_schema = {'title': 'A'}
-    attribute_schema.update(expected_schema)
+    attribute_schema |= expected_schema
 
     base_schema = {'title': 'Model', 'type': 'object', 'properties': {'a': attribute_schema}, 'required': ['a']}
 
@@ -765,11 +767,12 @@ def test_date_types(field_type, expected_schema):
     ],
 )
 def test_str_basic_types(field_type, expected_schema):
+
     class Model(BaseModel):
         a: field_type
 
     base_schema = {'title': 'Model', 'type': 'object'}
-    base_schema.update(expected_schema)
+    base_schema |= expected_schema
     assert Model.schema() == base_schema
 
 
@@ -1112,8 +1115,8 @@ def create_testing_submodules():
     os.makedirs(mod_root_path, exist_ok=True)
     open(mod_root_path / '__init__.py', 'w').close()
     for mod in ['a', 'b', 'c']:
-        module_name = 'module' + mod
-        model_name = 'model' + mod + '.py'
+        module_name = f'module{mod}'
+        model_name = f'model{mod}.py'
         os.makedirs(mod_root_path / module_name, exist_ok=True)
         open(mod_root_path / module_name / '__init__.py', 'w').close()
         with open(mod_root_path / module_name / model_name, 'w') as f:
@@ -1134,10 +1137,11 @@ def test_flat_models_unique_models():
     from pydantic_schema_test.moduled.modeld import Model as ModelD
 
     flat_models = get_flat_models_from_models([ModelA, ModelB, ModelD])
-    assert flat_models == set([ModelA, ModelB])
+    assert flat_models == {ModelA, ModelB}
 
 
 def test_flat_models_with_submodels():
+
     class Foo(BaseModel):
         a: str
 
@@ -1148,10 +1152,11 @@ def test_flat_models_with_submodels():
         c: Dict[str, Bar]
 
     flat_models = get_flat_models_from_model(Baz)
-    assert flat_models == set([Foo, Bar, Baz])
+    assert flat_models == {Foo, Bar, Baz}
 
 
 def test_flat_models_with_submodels_from_sequence():
+
     class Foo(BaseModel):
         a: str
 
@@ -1166,7 +1171,7 @@ def test_flat_models_with_submodels_from_sequence():
         ingredients: List[Ingredient]
 
     flat_models = get_flat_models_from_models([Bar, Pizza])
-    assert flat_models == set([Foo, Bar, Ingredient, Pizza])
+    assert flat_models == {Foo, Bar, Ingredient, Pizza}
 
 
 def test_model_name_maps():
@@ -1948,14 +1953,21 @@ def test_model_with_schema_extra_callable_classmethod():
 
 
 def test_model_with_schema_extra_callable_instance_method():
+
+
+
     class Model(BaseModel):
         name: str = None
 
+
+
         class Config:
-            def schema_extra(schema, model_class):
-                schema.pop('properties')
-                schema['type'] = 'override'
+            def schema_extra(self, model_class):
+                self.pop('properties')
+                self['type'] = 'override'
                 assert model_class is Model
+
+
 
     assert Model.schema() == {'title': 'Model', 'type': 'override'}
 

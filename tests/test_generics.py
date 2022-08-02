@@ -742,7 +742,10 @@ def test_iter_contained_typevars():
 
     assert list(iter_contained_typevars(Model[T])) == [T]
     assert list(iter_contained_typevars(Optional[List[Union[str, Model[T]]]])) == [T]
-    assert list(iter_contained_typevars(Optional[List[Union[str, Model[int]]]])) == []
+    assert not list(
+        iter_contained_typevars(Optional[List[Union[str, Model[int]]]])
+    )
+
     assert list(iter_contained_typevars(Optional[List[Union[str, Model[T], Callable[[T2, T], str]]]])) == [T, T2, T]
 
 

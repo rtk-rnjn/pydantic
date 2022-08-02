@@ -50,4 +50,4 @@ class StrictBoolModel(BaseModel):
 try:
     StrictBoolModel(strict_bool='False')
 except ValidationError as e:
-    print(str(e))
+    print(e)

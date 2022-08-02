@@ -88,16 +88,18 @@ class PydanticPlugin(Plugin):
 
     def get_base_class_hook(self, fullname: str) -> 'Optional[Callable[[ClassDefContext], None]]':
         sym = self.lookup_fully_qualified(fullname)
-        if sym and isinstance(sym.node, TypeInfo):  # pragma: no branch
-            # No branching may occur if the mypy cache has not been cleared
-            if any(get_fullname(base) == BASEMODEL_FULLNAME for base in sym.node.mro):
-                return self._pydantic_model_class_maker_callback
+        if (
+            sym
+            and isinstance(sym.node, TypeInfo)
+            and any(
+                get_fullname(base) == BASEMODEL_FULLNAME for base in sym.node.mro
+            )
+        ):
+            return self._pydantic_model_class_maker_callback
         return None
 
     def get_method_hook(self, fullname: str) -> Optional[Callable[[MethodContext], Type]]:
-        if fullname.endswith('.from_orm'):
-            return from_orm_callback
-        return None
+        return from_orm_callback if fullname.endswith('.from_orm') else None
 
     def get_class_decorator_hook(self, fullname: str) -> Optional[Callable[[ClassDefContext], None]]:
         if fullname == DATACLASS_FULLNAME:
@@ -188,9 +190,8 @@ class PydanticModelTransformer:
         config = self.collect_config()
         fields = self.collect_fields(config)
         for field in fields:
-            if info[field.name].type is None:
-                if not ctx.api.final_iteration:
-                    ctx.api.defer()
+            if info[field.name].type is None and not ctx.api.final_iteration:
+                ctx.api.defer()
         is_settings = any(get_fullname(base) == BASESETTINGS_FULLNAME for base in info.mro[:-1])
         self.add_initializer(fields, config, is_settings)
         self.add_construct_method(fields)
@@ -307,11 +308,10 @@ class PydanticModelTransformer:
                 if name not in known_fields:
                     field = PydanticModelField.deserialize(info, data)
                     known_fields.add(name)
-                    superclass_fields.append(field)
                 else:
                     (field,) = [a for a in all_fields if a.name == name]
                     all_fields.remove(field)
-                    superclass_fields.append(field)
+                superclass_fields.append(field)
             all_fields = superclass_fields + all_fields
         return all_fields
 
@@ -351,17 +351,13 @@ class PydanticModelTransformer:
 
         obj_type = ctx.api.named_type(f'{BUILTINS_NAME}.object')
         self_tvar_name = '_PydanticBaseModel'  # Make sure it does not conflict with other names in the class
-        tvar_fullname = ctx.cls.fullname + '.' + self_tvar_name
+        tvar_fullname = f'{ctx.cls.fullname}.{self_tvar_name}'
         tvd = TypeVarDef(self_tvar_name, tvar_fullname, -1, [], obj_type)
         self_tvar_expr = TypeVarExpr(self_tvar_name, tvar_fullname, [], obj_type)
         ctx.cls.info.names[self_tvar_name] = SymbolTableNode(MDEF, self_tvar_expr)
 
         # Backward-compatible with TypeVarDef from Mypy 0.910.
-        if isinstance(tvd, TypeVarType):
-            self_type = tvd
-        else:
-            self_type = TypeVarType(tvd)  # type: ignore[call-arg]
-
+        self_type = tvd if isinstance(tvd, TypeVarType) else TypeVarType(tvd)
         add_method(
             ctx,
             'construct',
@@ -389,7 +385,7 @@ class PydanticModelTransformer:
                 var = field.to_var(info, use_alias=False)
                 var.info = info
                 var.is_property = frozen
-                var._fullname = get_fullname(info) + '.' + get_name(var)
+                var._fullname = f'{get_fullname(info)}.{get_name(var)}'
                 info.names[get_name(var)] = SymbolTableNode(MDEF, var)
 
     def get_config_update(self, substmt: AssignmentStmt) -> Optional['ModelConfigData']:
@@ -411,9 +407,11 @@ class PydanticModelTransformer:
                 return None
             return ModelConfigData(forbid_extra=forbid_extra)
         if lhs.name == 'alias_generator':
-            has_alias_generator = True
-            if isinstance(substmt.rvalue, NameExpr) and substmt.rvalue.fullname == 'builtins.None':
-                has_alias_generator = False
+            has_alias_generator = (
+                not isinstance(substmt.rvalue, NameExpr)
+                or substmt.rvalue.fullname != 'builtins.None'
+            )
+
             return ModelConfigData(has_alias_generator=has_alias_generator)
         if isinstance(substmt.rvalue, NameExpr) and substmt.rvalue.fullname in ('builtins.True', 'builtins.False'):
             return ModelConfigData(**{lhs.name: substmt.rvalue.fullname == 'builtins.True'})
@@ -429,10 +427,10 @@ class PydanticModelTransformer:
         if isinstance(expr, TempNode):
             # TempNode means annotation-only, so only non-required if Optional
             value_type = get_proper_type(cls.info[lhs.name].type)
-            if isinstance(value_type, UnionType) and any(isinstance(item, NoneType) for item in value_type.items):
-                # Annotated as Optional, or otherwise having NoneType in the union
-                return False
-            return True
+            return not isinstance(value_type, UnionType) or not any(
+                isinstance(item, NoneType) for item in value_type.items
+            )
+
         if isinstance(expr, CallExpr) and isinstance(expr.callee, RefExpr) and expr.callee.fullname == FIELD_FULLNAME:
             # The "default value" is a call to `Field`; at this point, the field is
             # only required if default is Ellipsis (i.e., `field_name: Annotation = Field(...)`)
@@ -463,10 +461,7 @@ class PydanticModelTransformer:
             if arg_name != 'alias':
                 continue
             arg = expr.args[i]
-            if isinstance(arg, StrExpr):
-                return arg.value, False
-            else:
-                return None, True
+            return (arg.value, False) if isinstance(arg, StrExpr) else (None, True)
         return None, False
 
     def get_field_arguments(
@@ -478,12 +473,16 @@ class PydanticModelTransformer:
         Returns a list of mypy Argument instances for use in the generated signatures.
         """
         info = self._ctx.cls.info
-        arguments = [
-            field.to_argument(info, typed=typed, force_optional=force_all_optional, use_alias=use_alias)
+        return [
+            field.to_argument(
+                info,
+                typed=typed,
+                force_optional=force_all_optional,
+                use_alias=use_alias,
+            )
             for field in fields
             if not (use_alias and field.has_dynamic_alias)
         ]
-        return arguments
 
     def should_init_forbid_extra(self, fields: List['PydanticModelField'], config: 'ModelConfigData') -> bool:
         """
@@ -492,12 +491,14 @@ class PydanticModelTransformer:
         We disallow arbitrary kwargs if the extra config setting is "forbid", or if the plugin config says to,
         *unless* a required dynamic alias is present (since then we can't determine a valid signature).
         """
-        if not config.allow_population_by_field_name:
-            if self.is_dynamic_alias_present(fields, bool(config.has_alias_generator)):
-                return False
-        if config.forbid_extra:
-            return True
-        return self.plugin_config.init_forbid_extra
+        if (
+            not config.allow_population_by_field_name
+            and self.is_dynamic_alias_present(
+                fields, bool(config.has_alias_generator)
+            )
+        ):
+            return False
+        return True if config.forbid_extra else self.plugin_config.init_forbid_extra
 
     @staticmethod
     def is_dynamic_alias_present(fields: List['PydanticModelField'], has_alias_generator: bool) -> bool:
@@ -527,9 +528,7 @@ class PydanticModelField:
         self.column = column
 
     def to_var(self, info: TypeInfo, use_alias: bool) -> Var:
-        name = self.name
-        if use_alias and self.alias is not None:
-            name = self.alias
+        name = self.alias if use_alias and self.alias is not None else self.name
         return Var(name, info[self.name].type)
 
     def to_argument(self, info: TypeInfo, typed: bool, force_optional: bool, use_alias: bool) -> Argument:
@@ -665,7 +664,7 @@ def add_method(
     func.type = set_callable_name(signature, func)
     func.is_class = is_classmethod
     # func.is_static = is_staticmethod
-    func._fullname = get_fullname(info) + '.' + name
+    func._fullname = f'{get_fullname(info)}.{name}'
     func.line = info.line
 
     # NOTE: we would like the plugin generated node to dominate, but we still
@@ -702,9 +701,7 @@ def get_fullname(x: Union[FuncBase, SymbolNode]) -> str:
     Used for compatibility with mypy 0.740; can be dropped once support for 0.740 is dropped.
     """
     fn = x.fullname
-    if callable(fn):  # pragma: no cover
-        return fn()
-    return fn
+    return fn() if callable(fn) else fn
 
 
 def get_name(x: Union[FuncBase, SymbolNode]) -> str:
@@ -712,9 +709,7 @@ def get_name(x: Union[FuncBase, SymbolNode]) -> str:
     Used for compatibility with mypy 0.740; can be dropped once support for 0.740 is dropped.
     """
     fn = x.name
-    if callable(fn):  # pragma: no cover
-        return fn()
-    return fn
+    return fn() if callable(fn) else fn
 
 
 def parse_toml(config_file: str) -> Optional[Dict[str, Any]]:

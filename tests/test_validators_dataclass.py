@@ -8,13 +8,17 @@ from pydantic.dataclasses import dataclass
 
 
 def test_simple():
+
+
+
     @dataclass
     class MyDataclass:
         a: str
 
         @validator('a')
         def change_a(cls, v):
-            return v + ' changed'
+            return f'{v} changed'
+
 
     assert MyDataclass(a='this is foobar good').a == 'this is foobar good changed'
 
@@ -38,7 +42,10 @@ def test_validate_pre():
 
 
 def test_validate_multiple():
-    # also test TypeError
+# also test TypeError
+
+
+
     @dataclass
     class MyDataclass:
         a: str
@@ -48,7 +55,8 @@ def test_validate_multiple():
         def check_a_and_b(cls, v, field, **kwargs):
             if len(v) < 4:
                 raise TypeError(f'{field.alias} is too short')
-            return v + 'x'
+            return f'{v}x'
+
 
     assert asdict(MyDataclass(a='1234', b='5678')) == {'a': '1234x', 'b': '5678x'}
 
@@ -76,13 +84,17 @@ def test_classmethod():
 
 
 def test_validate_parent():
+
+
+
     @dataclass
     class Parent:
         a: str
 
         @validator('a')
         def change_a(cls, v):
-            return v + ' changed'
+            return f'{v} changed'
+
 
     @dataclass
     class Child(Parent):

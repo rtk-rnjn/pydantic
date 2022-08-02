@@ -12,4 +12,4 @@ Pie(flavor='pumpkin')
 try:
     Pie(flavor='cherry')
 except ValidationError as e:
-    print(str(e))
+    print(e)

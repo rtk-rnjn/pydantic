@@ -1313,15 +1313,19 @@ def test_untouched_types():
         def __get__(self, instance, owner):
             return self.getter(owner)
 
-    classproperty = _ClassPropertyDescriptor
+
 
     class Model(BaseModel):
+
+        classproperty = _ClassPropertyDescriptor
+
         class Config:
             keep_untouched = (classproperty,)
 
         @classproperty
-        def class_name(cls) -> str:
-            return cls.__name__
+        def class_name(self) -> str:
+            return self.__name__
+
 
     assert Model.class_name == 'Model'
     assert Model().class_name == 'Model'
@@ -1341,10 +1345,14 @@ def test_custom_types_fail_without_keep_untouched():
 
     with pytest.raises(RuntimeError) as e:
 
+
+
+
         class Model(BaseModel):
             @classproperty
-            def class_name(cls) -> str:
-                return cls.__name__
+            def class_name(self) -> str:
+                return self.__name__
+
 
         Model.class_name
 
@@ -1353,13 +1361,17 @@ def test_custom_types_fail_without_keep_untouched():
         "_ClassPropertyDescriptor'>, see `arbitrary_types_allowed` in Config"
     )
 
+
+
     class Model(BaseModel):
+
         class Config:
             arbitrary_types_allowed = True
 
         @classproperty
-        def class_name(cls) -> str:
-            return cls.__name__
+        def class_name(self) -> str:
+            return self.__name__
+
 
     with pytest.raises(AttributeError) as e:
         Model.class_name

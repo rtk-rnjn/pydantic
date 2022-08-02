@@ -366,8 +366,7 @@ class BaseModel(Representation, metaclass=ModelMetaclass):
                 except (ValueError, TypeError, AssertionError) as exc:
                     raise ValidationError([ErrorWrapper(exc, loc=ROOT_KEY)], self.__class__)
 
-            known_field = self.__fields__.get(name, None)
-            if known_field:
+            if known_field := self.__fields__.get(name, None):
                 # We want to
                 # - make sure validators are called without the current value for this field inside `values`
                 # - keep other values (e.g. submodels) untouched (using `BaseModel.dict()` will change them into dicts)
@@ -502,7 +501,8 @@ class BaseModel(Representation, metaclass=ModelMetaclass):
     @classmethod
     def _enforce_dict_if_root(cls, obj: Any) -> Any:
         if cls.__custom_root_type__ and (
-            not (isinstance(obj, dict) and obj.keys() == {ROOT_KEY})
+            not isinstance(obj, dict)
+            or obj.keys() != {ROOT_KEY}
             or cls.__fields__[ROOT_KEY].shape in MAPPING_LIKE_SHAPES
         ):
             return {ROOT_KEY: obj}
@@ -539,7 +539,7 @@ class BaseModel(Representation, metaclass=ModelMetaclass):
                 allow_pickle=allow_pickle,
                 json_loads=cls.__config__.json_loads,
             )
-        except (ValueError, TypeError, UnicodeDecodeError) as e:
+        except (ValueError, TypeError) as e:
             raise ValidationError([ErrorWrapper(e, loc=ROOT_KEY)], cls)
         return cls.parse_obj(obj)
 
@@ -591,7 +591,7 @@ class BaseModel(Representation, metaclass=ModelMetaclass):
                 fields_values[name] = values[name]
             elif not field.required:
                 fields_values[name] = field.get_default()
-        fields_values.update(values)
+        fields_values |= values
         object_setattr(m, '__dict__', fields_values)
         if _fields_set is None:
             _fields_set = set(values.keys())
@@ -695,9 +695,7 @@ class BaseModel(Representation, metaclass=ModelMetaclass):
 
     @classmethod
     def _decompose_class(cls: Type['Model'], obj: Any) -> GetterDict:
-        if isinstance(obj, GetterDict):
-            return obj
-        return cls.__config__.getter_dict(obj)
+        return obj if isinstance(obj, GetterDict) else cls.__config__.getter_dict(obj)
 
     @classmethod
     @no_type_check
@@ -714,21 +712,18 @@ class BaseModel(Representation, metaclass=ModelMetaclass):
     ) -> Any:
 
         if isinstance(v, BaseModel):
-            if to_dict:
-                v_dict = v.dict(
-                    by_alias=by_alias,
-                    exclude_unset=exclude_unset,
-                    exclude_defaults=exclude_defaults,
-                    include=include,
-                    exclude=exclude,
-                    exclude_none=exclude_none,
-                )
-                if ROOT_KEY in v_dict:
-                    return v_dict[ROOT_KEY]
-                return v_dict
-            else:
+            if not to_dict:
                 return v.copy(include=include, exclude=exclude)
 
+            v_dict = v.dict(
+                by_alias=by_alias,
+                exclude_unset=exclude_unset,
+                exclude_defaults=exclude_defaults,
+                include=include,
+                exclude=exclude,
+                exclude_none=exclude_none,
+            )
+            return v_dict[ROOT_KEY] if ROOT_KEY in v_dict else v_dict
         value_exclude = ValueItems(v, exclude) if exclude else None
         value_include = ValueItems(v, include) if include else None
 
@@ -859,15 +854,11 @@ class BaseModel(Representation, metaclass=ModelMetaclass):
         exclude_unset: bool,
         update: Optional['DictStrAny'] = None,
     ) -> Optional[AbstractSet[str]]:
-        if include is None and exclude is None and exclude_unset is False:
+        if include is None and exclude is None and not exclude_unset:
             return None
 
         keys: AbstractSet[str]
-        if exclude_unset:
-            keys = self.__fields_set__.copy()
-        else:
-            keys = self.__dict__.keys()
-
+        keys = self.__fields_set__.copy() if exclude_unset else self.__dict__.keys()
         if include is not None:
             keys &= include.keys()
 

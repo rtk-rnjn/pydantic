@@ -10,4 +10,4 @@ print(BooleanModel(bool_value='False'))
 try:
     BooleanModel(bool_value=[])
 except ValidationError as e:
-    print(str(e))
+    print(e)

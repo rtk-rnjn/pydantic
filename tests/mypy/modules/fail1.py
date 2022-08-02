@@ -1,6 +1,7 @@
 """
 Test mypy failure with missing attribute
 """
+
 from datetime import datetime
 from typing import List, Optional
 
@@ -17,4 +18,4 @@ class Model(BaseModel):
 
 m = Model(age=42, list_of_ints=[1, '2', b'3'])
 
-print(m.age + 'not integer')
+print(f'{m.age}not integer')

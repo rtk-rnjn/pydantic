@@ -45,10 +45,7 @@ def validate_arguments(func: Optional['AnyCallableT'] = None, *, config: 'Config
         wrapper_function.model = vd.model  # type: ignore
         return wrapper_function
 
-    if func:
-        return validate(func)
-    else:
-        return validate
+    return validate(func) if func else validate
 
 
 ALT_V_ARGS = 'v__args'
@@ -80,11 +77,7 @@ class ValidatedFunction:
         takes_kwargs = False
         fields: Dict[str, Tuple[Any, Any]] = {}
         for i, (name, p) in enumerate(parameters.items()):
-            if p.annotation is p.empty:
-                annotation = Any
-            else:
-                annotation = type_hints[name]
-
+            annotation = Any if p.annotation is p.empty else type_hints[name]
             default = ... if p.default is p.empty else p.default
             if p.kind == Parameter.POSITIONAL_ONLY:
                 self.arg_mapping[i] = name
